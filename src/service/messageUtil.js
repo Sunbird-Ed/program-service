@@ -692,6 +692,22 @@ exports.PROGRAM = {
       FAILED_MESSAGE: 'Unable to update the nomination data'
     }
   },
+  USER:{
+    ADD :{
+       MISSING_CODE: 'ERR_ADD_USER_DATA',
+       MISSING_MESSAGE: 'Required fields like firstname, user_id for adding user is missing',
+       FAILED_CODE: 'ERR_ADD_USER_DATA_FAILED',
+       FAILED_MESSAGE: 'Unabled to add user data'
+    }
+  },
+  ORG:{
+    READ :{
+       MISSING_CODE: 'ERR_READ_ORG_DATA',
+       MISSING_MESSAGE: 'Required fields like Org id is missing',
+       FAILED_CODE: 'ERR_READ_ORG_DATA_FAILED',
+       FAILED_MESSAGE: 'Unabled to read user data'
+    }
+  },
   COPY_COLLECTION: {
     COPY: {
       MISSING_CODE: 'ERR_COPYING_COLLECTIONS',

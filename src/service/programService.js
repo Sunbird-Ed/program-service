@@ -657,14 +657,20 @@ function getUsersDetailsById(req, response) {
     function (callback1) {
       getUserDetailsFromRegistry(dikshaUserId, callback1)
     },
-    function (user, callback2) {
-      getUserOrgMappingDetailFromRegistry(user, callback2);
+    function (userDetailObj, callback2) {
+      getUserOrgMappingDetailFromRegistry(userDetailObj, callback2);
     },
-    function (user, userOrgMapDetails, callback3) {
-      getOrgDetailsFromRegistry(user, userOrgMapDetails, callback3)
+    function (userDetailsObj, callback3) {
+      if(userDetailsObj.User_Org){
+         getOrgDetailsFromRegistry(userDetailsObj, callback3)
+
+      }else{
+        userDetailsObj.User['Orgs']=[]
+        callback3(null,userDetailsObj)
+      }
     },
-    function (user, userOrgMapDetails, orgInfoLists, callback4) {
-      createUserRecords(user, userOrgMapDetails, orgInfoLists, callback4)
+    function (userDetailsObj, callback4) {
+      createUserRecords(userDetailsObj, callback4)
     }
   ], function (err, res) {
     if (err) {
@@ -705,11 +711,11 @@ function getUserDetailsFromRegistry(value, callback) {
   }
 
   registryService.searchRecord(userDetailReq, (err, res) => {
-    if (res) {
-      if (res.status == 200) {
+    if (res && res.status == 200) {
         if (res.data.result.User.length > 0) {
-          var userDetails = res.data.result.User[0];
-          callback(null, userDetails)
+          var userDetailsObj = {}
+          userDetailsObj['User'] = res.data.result.User[0];
+          callback(null, userDetailsObj)
         } else {
           callback("user does not exist")
         }
@@ -717,16 +723,14 @@ function getUserDetailsFromRegistry(value, callback) {
         logger.error("Encountered some error while searching data")
         callback("Encountered some error while searching data")
       }
-    } else {
-      logger.error("Encountered some error while searching data")
-      callback("Encountered some error while searching data")
-    }
+    
   });
 
 }
 
 
-function getUserOrgMappingDetailFromRegistry(user, callback) {
+function getUserOrgMappingDetailFromRegistry(userDetailObj, callback) {
+
 
   let userOrgMappingReq = {
     body: {
@@ -735,7 +739,7 @@ function getUserOrgMappingDetailFromRegistry(user, callback) {
         entityType: ["User_Org"],
         filters: {
           userId: {
-            eq: user.osid
+            eq: userDetailObj.User.osid
           }
         }
 
@@ -744,83 +748,80 @@ function getUserOrgMappingDetailFromRegistry(user, callback) {
   }
 
   registryService.searchRecord(userOrgMappingReq, (err, res) => {
-    if (res) {
-      if (res.status == 200) {
-        if (res.data.result.User_Org.length > 0) {
+    if (res && res.status == 200) {
           userOrgMapList = res.data.result.User_Org
-          callback(null, user, userOrgMapList)
-        } else {
-          callback("Org not mapped to the user: " + user.userId)
-        }
+          if(userOrgMapList.length > 0){
+               userDetailObj['User_Org'] = userOrgMapList
+          }
+          callback(null, userDetailObj)
+        
       } else {
         logger.error("Encountered some error while searching data")
         callback("Encountered some error while searching data")
       }
-    } else {
-      logger.error("Encountered some error while searching data")
-      callback("Encountered some error while searching data")
-    }
+   
   });
 
 }
 
-function getOrgDetailsFromRegistry(user, userOrgMapDetails, callback) {
+function getOrgDetailsFromRegistry(userDetailsObj, callback) {
 
-  const orgList = userOrgMapDetails.map((value) => value.orgId.slice(2))
+      const orgList = userDetailsObj.User_Org.map((value) => value.orgId.slice(2))
 
-  let orgDetailsReq = {
-    body: {
-      id: "open-saber.registry.search",
-      request: {
-        entityType: ["Org"],
-        filters: {
-          osid: {
-            or: orgList
+        let orgDetailsReq = {
+          body: {
+            id: "open-saber.registry.search",
+            request: {
+              entityType: ["Org"],
+              filters: {
+                osid: {
+                  or: orgList
+                }
+              }
+
+            }
           }
         }
 
-      }
-    }
-  }
+        registryService.searchRecord(orgDetailsReq, (err, res) => {
+          if (res && res.status == 200) {
+              if (res.data.result.Org.length > 0) {
+                const orgInfoList = res.data.result.Org
+                userDetailsObj.User['Orgs'] = orgInfoList
+                callback(null, userDetailsObj)
+              } else {
+                callback("Org Details Not available with org Ids: " + orgList.toString())
+              }
+            } else {
+              logger.error("Encountered some error while searching data")
+              callback("Encountered some error while searching data")
+            }
+          
+        });
 
-  registryService.searchRecord(orgDetailsReq, (err, res) => {
-    if (res) {
-      if (res.status == 200) {
-        if (res.data.result.Org.length > 0) {
-          orgInfoList = res.data.result.Org
-          callback(null, user, userOrgMapList, orgInfoList)
-        } else {
-          callback("Org Details Not available with org Ids: " + orgList.toString())
-        }
-      } else {
-        logger.error("Encountered some error while searching data")
-        callback("Encountered some error while searching data")
-      }
-    } else {
-      logger.error("Encountered some error while searching data")
-      callback("Encountered some error while searching data")
-    }
-  });
+ 
 
 }
 
-function createUserRecords(user, userOrgMapDetails, orgInfoList, callback) {
+function createUserRecords(userDetailsObj, callback) {
 
   try {
-    orgInfoList.map((org) => {
-      var roles = null
-      userOrgMapDetails.forEach(function (element, index, array) {
-        if (org.osid === element.orgId) {
-          roles = element.roles;
-        }
-      });
+        var userResObj = {}
 
-      org['roles'] = roles
+        userDetailsObj.User.Orgs.map((org) => {
+                var roles = null
+                userDetailsObj.User_Org.forEach(function (element, index, array) {
+                  if (org.osid === element.orgId) {
+                    roles = element.roles;
+                  }
+                });
 
-    });
+                org['roles'] = roles
 
-    user['orgs'] = orgInfoList
-    callback(null, user)
+              });
+        
+        userResObj['User'] = userDetailsObj.User
+        callback(null, userResObj)
 
   } catch (e) {
     logger.error("Error while parsing for user lists")
@@ -830,8 +831,271 @@ function createUserRecords(user, userOrgMapDetails, orgInfoList, callback) {
 
 }
 
+function checkUserExists(reqObj, callback) {
+
+  let search = {
+    body: {
+      id: "open-saber.registry.search",
+      request: {
+        entityType:["User"],
+        filters:{
+          userId:{
+            eq:reqObj.User.userId
+          }
+        }
+      }
+    }
+  }
+
+  registryService.searchRecord(search, (err, res) => {
+    if (res && res.status == 200 && 
+          res.data.params.status=='SUCCESSFUL'){
+
+            reqObj['isUserExist'] = res.data.result.User.length > 0 ? true: false                       
+            callback(null,reqObj)
+        
+      } else {
+        logger.error("Encounted some error while adding user")
+        callback("Encounted some error while adding user")
+      }
+  });
+
+}
+
+function addUserToRegistry(reqObj, callback) {
+
+  let addUserReq = {
+    body: {
+      id: "open-saber.registry.create",
+      request: {
+        User: reqObj.User
+      }
+    }
+  }
+
+  registryService.addRecord(addUserReq, (err, res) => {
+    if (res && res.status == 200 && 
+          res.data.params.status=='SUCCESSFUL'){
+             
+            reqObj.User['osid'] = res.data.result.User.osid
+             callback(null,reqObj)
+        
+      } else {
+        logger.error("Encounted some error while adding user")
+        callback("Encounted some error while adding user")
+      }
+  });
+
+}
+
+function mapUserToOrg(reqObj, callback) {
+
+  let mapReq = {
+    body: {
+      id: "open-saber.registry.create",
+      request: {
+        User_Org:{
+          orgId: reqObj.orgId,
+          userId: reqObj.User.osid,
+          roles: reqObj.roles
+        }
+      }
+    }
+  }
+
+  registryService.addRecord(mapReq, (err, res) => {
+      if (res && res.status == 200 &&
+         res.data.params.status=='SUCCESSFUL'){
+              
+             callback(null,reqObj.User)
+        
+      } else {
+        logger.error("Encounted some error while map user to org")
+        callback("Encounted some error while map user to org")
+    }
+  });
+
+}
 
 
+function addUserToOrgRegistry(req, response) {
+  var data = req.body
+  var rspObj = req.rspObj
+  if (!data.request || !data.request.User || !data.request.User.userId || !data.request.User.firstName) {
+      rspObj.errCode = programMessages.USER.ADD.MISSING_CODE
+      rspObj.errMsg = programMessages.USER.ADD.MISSING_MESSAGE
+      rspObj.responseCode = responseCode.CLIENT_ERROR
+      logger.error({
+        msg: 'Error due to missing request or request firstname or request user_id',
+        err: {
+          errCode: rspObj.errCode,
+          errMsg: rspObj.errMsg,
+          responseCode: rspObj.responseCode
+        },
+        additionalInfo: {
+          data
+        }
+      }, req)
+      return response.status(400).send(errorResponse(rspObj))
+   }
+   const insertObj = req.body.request;
+
+   async.waterfall([
+    function(callback){
+      checkUserExists(insertObj,callback)
+    },
+    function (insertObj, callback1) {
+      if(!insertObj['isUserExist']){
+        delete insertObj['isUserExist']
+
+        addUserToRegistry(insertObj, callback1)
+      }else{
+         callback1("User Already Exist")
+      }
+    },
+    function (insertObj, callback2) {
+      if(insertObj.orgId){
+         mapUserToOrg(insertObj, callback2);
+      }{
+        callback2(null,insertObj.User)
+      }
+    }
+  ], function (err, res) {
+    if (err) {
+      return response.status(400).send(errorResponse({
+        apiId: 'api.user.add',
+        ver: '1.0',
+        msgid: uuid(),
+        responseCode: 'ERR_ADD_USER',
+        result: err.message || err
+      }))
+
+    } else {
+      return response.status(200).send(successResponse({
+        apiId: 'api.user.add',
+        ver: '1.0',
+        msgid: uuid(),
+        responseCode: 'OK',
+        result: res
+      }))
+    }
+  });    
+
+}
+
+function getUsersMappedToOrg(orgId, callback) {
+
+  let searchReq = {
+    body: {
+      id: "open-saber.registry.search",
+      request: {
+        entityType:["User_Org"],
+        filters:{
+          orgId:{
+            eq: orgId
+          }
+        }
+      }
+    }
+  }
+
+  registryService.searchRecord(searchReq, (err, res) => {
+      if (res && res.status == 200 &&
+         res.data.params.status=='SUCCESSFUL'){
+          const userList = res.data.result.User_Org.map((value) => value.userId.slice(2))
+              
+          callback(null,userList)
+              
+        
+      } else {
+        logger.error("Encounted some error getting list of user")
+        callback("Encounted some error while getting list tof user")
+    }
+  });
+
+}
+
+function getUserDetailsByUserIds(userList, callback) {
+
+  let searchReq = {
+    body: {
+      id: "open-saber.registry.search",
+      request: {
+        entityType:["User"],
+        filters:{
+          osid:{
+            or: userList
+          }
+        }
+      }
+    }
+  }
+
+  registryService.searchRecord(searchReq, (err, res) => {
+      if (res && res.status == 200 &&
+         res.data.params.status=='SUCCESSFUL'){
+          callback(null,res.data.result)
+        
+      } else {
+        logger.error("Encounted some error getting list of user")
+        callback("Encounted some error while getting list tof user")
+    }
+  });
+
+}
+
+
+function getUserDetailsByOrg(req, response) {
+  var data = req.body
+  var rspObj = req.rspObj
+  if (!data.request || !data.request.Org || !data.request.Org.osid) {
+      rspObj.errCode = programMessages.ORG.READ.MISSING_CODE
+      rspObj.errMsg = programMessages.ORG.READ.MISSING_MESSAGE
+      rspObj.responseCode = responseCode.CLIENT_ERROR
+      logger.error({
+        msg: 'Error due to missing request or request org id',
+        err: {
+          errCode: rspObj.errCode,
+          errMsg: rspObj.errMsg,
+          responseCode: rspObj.responseCode
+        },
+        additionalInfo: {
+          data
+        }
+      }, req)
+      return response.status(400).send(errorResponse(rspObj))
+   }
+
+  const orgId = data.request.Org.osid
+   
+  async.waterfall([
+    function (callback1) {
+      getUsersMappedToOrg(orgId, callback1)
+    },
+    function (userList, callback2) {
+      getUserDetailsByUserIds(userList, callback2);
+    }    
+  ], function (err, res) {
+    if (err) {
+      return response.status(400).send(errorResponse({
+        apiId: 'api.user.read',
+        ver: '1.0',
+        msgid: uuid(),
+        responseCode: 'ERR_READ_USER',
+        result: err.message || err
+      }))
+
+    } else {
+      return response.status(200).send(successResponse({
+        apiId: 'api.user.read',
+        ver: '1.0',
+        msgid: uuid(),
+        responseCode: 'OK',
+        result: res
+      }))
+    }
+  });
+}
 
 
 function programSearch(req, response) {
@@ -1179,3 +1443,5 @@ module.exports.programGetContentTypesAPI = getProgramContentTypes
 module.exports.getUserDetailsAPI = getUsersDetailsById
 module.exports.healthAPI = health
 module.exports.programCopyCollectionAPI = programCopyCollections;
+module.exports.addUserAPI= addUserToOrgRegistry
+module.exports.getUserDetailsByOrgAPI = getUserDetailsByOrg
