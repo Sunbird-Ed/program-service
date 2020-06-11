@@ -9,6 +9,8 @@ const envVariables = {
     level: process.env.sunbird_service_log_level || 'info',
     LEARNING_SERVICE_URL: process.env.learning_service_url,
     OPENSABER_SERVICE_URL: process.env.opensaber_service_url,
+    SUNBIRD_KAFKA_HOST: process.env.sunbird_kafka_host,
+    SUNBIRD_AUTO_CREATION_TOPIC: process.env.sunbird_auto_creation_topic,
     config: {
         user: process.env.sunbird_program_db_user || "postgres",
         host: process.env.sunbird_program_db_host || "localhost",

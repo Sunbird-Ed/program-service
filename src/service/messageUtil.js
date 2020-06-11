@@ -678,6 +678,12 @@ exports.PROGRAM = {
     FAILED_CODE: 'ERR_GENERATING_PROGRAM_DATA_FAILED',
     FAILED_MESSAGE: 'Unable to generate the program data'
   },
+  CONTENT_PUBLISH: {
+    MISSING_CODE: 'ERR_CONTENT_PUBLISH',
+    MISSING_MESSAGE: 'Required fields like content_id or textbook_id or units missing',
+    FAILED_CODE: 'ERR_CONTENT_PUBLISH_FAILED',
+    FAILED_MESSAGE: 'Unable to publish contnet'
+  },
   NOMINATION: {
     READ: {
       MISSING_CODE: 'ERR_GET_NOMINATION_DATA',

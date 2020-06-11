@@ -13,10 +13,13 @@ const model = require('../models');
 const {
   forkJoin
 } = require('rxjs');
+const { catchError , map } = require('rxjs/operators');
 const axios = require('axios');
 const envVariables = require('../envVariables');
 const RegistryService = require('./registryService')
 const ProgramServiceHelper = require('../helpers/programHelper');
+const KafkaService = require('../helpers/kafkaUtil')
+const publishHelper = require('../helpers/publishHelper')
 var async = require('async')
 
 
@@ -1424,6 +1427,74 @@ async function programCopyCollections(req, response) {
         console.log('Error searching for collections', error)
         loggerError('Error searching for collections', rspObj.errCode, rspObj.errMsg, rspObj.responseCode, error, req)
         return response.status(error.response.status || 400).send(errorResponse(rspObj))
+      }
+    )
+}
+
+function publishContent(req, response){
+  var rspObj = req.rspObj;
+  const reqHeaders = req.headers;
+  var data = req.body;
+  if (!data.request || !data.request.content_id || !data.request.origin ||
+    !data.request.origin.channel || !data.request.origin.textbook_id || !data.request.origin.units) {
+    rspObj.errCode = programMessages.CONTENT_PUBLISH.MISSING_CODE
+    rspObj.errMsg = programMessages.CONTENT_PUBLISH.MISSING_MESSAGE
+    rspObj.responseCode = responseCode.CLIENT_ERROR
+    logger.error({
+      msg: 'Error due to missing request or content_id or origin textbook_id or origin units or origin channel',
+      err: {
+        errCode: rspObj.errCode,
+        errMsg: rspObj.errMsg,
+        responseCode: rspObj.responseCode
+      },
+      additionalInfo: {
+        data
+      }
+    })
+    return response.status(400).send(errorResponse(rspObj))
+  }
+
+  publishHelper.getContentMetaData(data.request.content_id, reqHeaders)
+    .pipe(
+      map(responseMetaData => {
+        const contentMetaData =  _.get(responseMetaData, 'data.result.content');
+        if(!contentMetaData) {
+          throw new Error("Fetching content metadata failed!");
+        }
+        return contentMetaData;
+      }),
+      catchError(err => {
+        throw err;
+      })
+    )
+    .subscribe(
+      (contentMetaData) => {
+        contentMetaData.channel = _.get(data, 'request.origin.channel') || contentMetaData.channel;
+        var units = _.isArray(data.request.origin.units) ? data.request.origin.units : [data.request.origin.units];
+        const eventData = publishHelper.getPublishContentEvent(contentMetaData, data.request.origin.textbook_id, units);
+        KafkaService.sendRecord(eventData, function (err, res) {
+          if (err) {
+            logger.error({ msg: 'Error while sending event to kafka', err, additionalInfo: { eventData } })
+            rspObj.errCode = programMessages.CONTENT_PUBLISH.FAILED_CODE
+            rspObj.errMsg = 'Error while sending event to kafka'
+            rspObj.responseCode = responseCode.SERVER_ERROR
+            return response.status(400).send(errorResponse(rspObj));
+          } else {
+            rspObj.responseCode = 'OK'
+            rspObj.result = {
+              'publishStatus': `Publish Operation for Content Id ${data.request.content_id} Started Successfully!`
+            }
+            return response.status(200).send(successResponse(rspObj));
+          }
+        });
+      },
+      (error) => {
+        rspObj.errCode = programMessages.CONTENT_PUBLISH.FAILED_CODE
+        rspObj.errMsg = programMessages.CONTENT_PUBLISH.FAILED_MESSAGE
+        rspObj.responseCode = responseCode.SERVER_ERROR
+        loggerError('Unable to publish content',
+        rspObj.errCode, rspObj.errMsg, rspObj.responseCode, error);
+        return response.status(400).send(errorResponse(rspObj));
       }
     )
 }
