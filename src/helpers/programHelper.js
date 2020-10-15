@@ -859,9 +859,9 @@ class ProgramServiceHelper {
    */
   sortPrograms(programs, sort) {
     _.map(programs, program => {
-      program.matchCount =  _.intersection(JSON.parse(program.medium), sort.medium).length
-        + _.intersection(JSON.parse(program.gradeLevel), sort.gradeLevel).length
-        + _.intersection(JSON.parse(program.subject), sort.subject).length;
+      program.matchCount =  _.intersection(sort.medium, JSON.parse(program.medium)).length
+        + _.intersection(sort.gradeLevel, JSON.parse(program.gradeLevel)).length
+        + _.intersection(sort.subject, JSON.parse(program.subject)).length;
       return program;
     });
 
