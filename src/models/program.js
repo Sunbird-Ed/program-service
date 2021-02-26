@@ -76,6 +76,9 @@ module.exports = function(sequelize, DataTypes) {
       type: DataTypes.TEXT,
       defaultValue: 'DIKSHA'
     },
+    rewards: {
+      type: DataTypes.TEXT
+    },
     template_id: {
       type: DataTypes.TEXT
     },
