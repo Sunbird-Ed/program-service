@@ -31,7 +31,7 @@
     "jade": "~1.11.0",
     "jsonwebtoken": "^8.5.1",
     "kafka-node": "^3.0.1",
-    "lodash": "^4.17.15",
+    "lodash": "^4.17.21",
     "morgan": "~1.9.1",
     "node-fetch": "2.6.1",
     "pdfmake": "^0.1.70",
